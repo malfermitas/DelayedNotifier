@@ -16,6 +16,7 @@ type NotificationService interface {
 	CreateNotification(ctx context.Context, message, sendAt, channel string) (string, error)
 	GetNotificationById(ctx context.Context, id string) (*model.Notification, error)
 	DeleteNotificationById(ctx context.Context, id string) error
+	MarkNotificationAsCancelled(ctx context.Context, id string) error
 	ProcessNotificationFromQueue(ctx context.Context, notification model.Notification) error
 }
 type notificationService struct {
@@ -90,6 +91,10 @@ func (n notificationService) GetNotificationById(
 func (n notificationService) DeleteNotificationById(ctx context.Context, id string) error {
 	err := n.repo.Remove(id)
 	return err
+}
+
+func (n notificationService) MarkNotificationAsCancelled(ctx context.Context, id string) error {
+	return n.repo.UpdateStatus(id, model.StatusCancelled)
 }
 
 func (n notificationService) ProcessNotificationFromQueue(ctx context.Context, notification model.Notification) error {

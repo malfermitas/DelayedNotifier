@@ -51,10 +51,32 @@ func (h notificationHandler) CreateNotification(ctx *ginext.Context) {
 
 // GetNotificationStatus – GET /notify/{id} — получение статуса уведомления
 func (h notificationHandler) GetNotificationStatus(ctx *ginext.Context) {
+	notificationID := ctx.Param("id")
+	if notificationID == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "notification id is required"})
+		return
+	}
 
+	notification, err := h.service.GetNotificationById(ctx, notificationID)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	}
+
+	ctx.JSON(http.StatusOK, notification)
 }
 
 // CancelNotification – DELETE /notify/{id} — отмена запланированного уведомления
 func (h notificationHandler) CancelNotification(ctx *ginext.Context) {
+	notificationID := ctx.Param("id")
+	if notificationID == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "notification id is required"})
+		return
+	}
 
+	err := h.service.MarkNotificationAsCancelled(ctx, notificationID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
+
+	ctx.Status(http.StatusOK)
 }
