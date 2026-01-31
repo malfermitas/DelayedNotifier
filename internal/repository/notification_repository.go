@@ -13,6 +13,7 @@ import (
 type NotificationRepository interface {
 	Save(notification *model.Notification) error
 	GetByID(id string) (*model.Notification, error)
+	UpdateStatus(id string, status model.NotificationStatus) error
 	Remove(id string) error
 }
 
@@ -92,6 +93,17 @@ func (n notificationRepository) GetByID(id string) (*model.Notification, error) 
 	n.logger.Info().Str("id", id).Msg("notification retrieved")
 
 	return notification, nil
+}
+
+func (n notificationRepository) UpdateStatus(id string, status model.NotificationStatus) error {
+	query := "UPDATE notifications SET status = $1 WHERE id = $2"
+
+	_, err := n.db.ExecContext(context.Background(), query, status, id)
+	if err != nil {
+		n.logger.Error().Str("id", id).Str("error", err.Error()).Msg("failed to update notification status")
+		return err
+	}
+	return nil
 }
 
 func (n notificationRepository) Remove(id string) error {
