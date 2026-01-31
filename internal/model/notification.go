@@ -37,6 +37,8 @@ type Notification struct {
 	SendAt     time.Time           `json:"send_at" db:"send_at"`
 	Status     NotificationStatus  `json:"status" db:"status"`
 	Channel    NotificationChannel `json:"channel" db:"channel"`
+	Email      string              `json:"email" db:"email"`
+	TelegramID string              `json:"telegram_id" db:"telegram_id"`
 	CreatedAt  time.Time           `json:"created_at" db:"created_at"`
 	UpdatedAt  time.Time           `json:"updated_at" db:"updated_at"`
 	RetryCount int                 `json:"retry_count" db:"retry_count"`
