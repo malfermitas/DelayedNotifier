@@ -17,8 +17,8 @@ type notificationHandler struct {
 	service service.NotificationService
 }
 
-func NewNotificationHandler() NotificationHandler {
-	return notificationHandler{}
+func NewNotificationHandler(service service.NotificationService) NotificationHandler {
+	return notificationHandler{service: service}
 }
 
 type CreateNotificationRequest struct {
