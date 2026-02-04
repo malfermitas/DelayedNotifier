@@ -4,9 +4,10 @@ import (
 	"DelayedNotifier/internal/model"
 	"DelayedNotifier/internal/repository"
 	"DelayedNotifier/internal/sender"
+	"DelayedNotifier/internal/sender/telegram"
 	"DelayedNotifier/internal/shared"
 	"context"
-	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/wb-go/wbf/zlog"
@@ -16,14 +17,14 @@ type NotificationWorkerService struct {
 	repo            repository.NotificationRepository
 	resultPublisher shared.ResultPublisher
 	emailSender     *sender.EmailSender
-	telegramSender  *sender.TelegramSender
+	telegramSender  *telegram.TelegramSender
 }
 
 func NewNotificationWorkerService(
 	repo repository.NotificationRepository,
 	resultPublisher shared.ResultPublisher,
 	emailSender *sender.EmailSender,
-	telegramSender *sender.TelegramSender,
+	telegramSender *telegram.TelegramSender,
 ) *NotificationWorkerService {
 	return &NotificationWorkerService{
 		repo:            repo,
@@ -93,11 +94,35 @@ func (s *NotificationWorkerService) ProcessNotificationFromQueue(ctx context.Con
 func (s *NotificationWorkerService) sendNotification(notification model.Notification) error {
 	switch notification.Channel {
 	case "email":
-		// TODO: send email
+		err := s.emailSender.SendEmail(notification.Email, "New notification", notification.Message)
+		if err != nil {
+			zlog.Logger.Error().
+				Err(err).
+				Str("notification_id", notification.ID).
+				Msg("Failed to send email")
+			return err
+		}
 	case "telegram":
-		// TODO: send tg
+		telegramIDInt64, err := strconv.ParseInt(notification.TelegramID, 10, 64)
+		if err != nil {
+			zlog.Logger.Error().
+				Err(err).
+				Str("telegramId", notification.TelegramID).
+				Msg("Failed to convert telegram ID to int64")
+		}
+		err = s.telegramSender.SendMessage(telegramIDInt64, notification.Message)
+		if err != nil {
+			zlog.Logger.Error().
+				Err(err).
+				Int64("telegramId", telegramIDInt64).
+				Msg("Failed to send telegram message")
+			return err
+		}
 	default:
-		return fmt.Errorf("unsupported channel: %s", notification.Channel)
+		zlog.Logger.Error().
+			Str("channel", string(notification.Channel)).
+			Str("notification_id", notification.ID).
+			Msg("Unknown notification channel")
 	}
 	return nil
 }

@@ -42,7 +42,7 @@ func NewEmailSender(cfg EmailSenderConfig) (*EmailSender, error) {
 	return &EmailSender{cfg: cfg}, nil
 }
 
-func (s *EmailSender) sendEmail(toEmail string, subject string, text string) error {
+func (s *EmailSender) SendEmail(toEmail string, subject string, text string) error {
 	address := net.JoinHostPort(s.cfg.SMTPHost, strconv.Itoa(s.cfg.SMTPPort))
 
 	headers := make([]string, 0, 5)
