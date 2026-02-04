@@ -25,7 +25,7 @@ import (
 
 func main() {
 	// 1. Load config
-	cfg, err := config.Load("config.yaml")
+	cfg, err := config.Load("config.yaml", ".env")
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
@@ -55,11 +55,13 @@ func main() {
 	repo := repository.NewNotificationRepository(db, &zlog.Logger)
 	svc := service.NewNotificationService(repo, chatIdsRepo, publisher)
 
-	telegramReader, telegramReaderInitErr := telegram.NewTelegramReader(svc, cfg.Telegram.Token)
+	telegramToken := cfg.Telegram.Token
+	telegramReader, telegramReaderInitErr := telegram.NewTelegramReader(svc, telegramToken)
 	go func() {
-		telegramReader.Run()
 		if telegramReaderInitErr != nil {
 			zlog.Logger.Error().Err(telegramReaderInitErr).Msg("Failed to initialize telegram reader")
+		} else {
+			telegramReader.Run()
 		}
 	}()
 
@@ -70,7 +72,7 @@ func main() {
 		svc,
 	)
 
-	h := handler.NewNotificationHandler(svc)
+	h := handler.NewNotificationHandler(svc, cfg.Telegram.BotUsername)
 	router := delivery.NewRouter(h)
 
 	// 7. HTTP Server

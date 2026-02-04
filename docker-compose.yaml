@@ -16,6 +16,8 @@ services:
       - APP_DATABASE_PASSWORD=password
       - APP_DATABASE_NAME=delayed_notifier
       - APP_RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME}
     depends_on:
       db:
         condition: service_healthy
@@ -38,6 +40,8 @@ services:
       - APP_DATABASE_PASSWORD=password
       - APP_DATABASE_NAME=delayed_notifier
       - APP_RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME}
     depends_on:
       db:
         condition: service_healthy

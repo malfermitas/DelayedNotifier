@@ -21,7 +21,7 @@ import (
 
 func main() {
 	// 1. Load config
-	cfg, err := config.Load("config.yaml")
+	cfg, err := config.Load("config_worker.yaml", ".env")
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
@@ -52,7 +52,9 @@ func main() {
 	}
 
 	// Для отправки уведомлений в Telegram бота
-	telegramSender, telegramSenderInitErr := telegram.NewTelegramSender(cfg.Telegram.Token)
+
+	telegramToken := cfg.Telegram.Token
+	telegramSender, telegramSenderInitErr := telegram.NewTelegramSender(telegramToken)
 	if telegramSenderInitErr != nil {
 		zlog.Logger.Error().Err(telegramSenderInitErr).Msg("Failed to initialize telegram")
 	}

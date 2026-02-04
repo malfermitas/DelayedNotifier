@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+
 	"github.com/wb-go/wbf/config"
 )
 
@@ -29,8 +31,8 @@ type RabbitMQConfig struct {
 }
 
 type TelegramConfig struct {
-	Token  string `mapstructure:"token"`
-	ChatID int64  `mapstructure:"chat_id"`
+	Token       string
+	BotUsername string
 }
 
 type EmailConfig struct {
@@ -41,21 +43,25 @@ type EmailConfig struct {
 	From     string `mapstructure:"from"`
 }
 
-func Load(path string) (*Config, error) {
+func Load(path string, pathEnv string) (*Config, error) {
 	c := config.New()
 
 	c.EnableEnv("APP")
+	if err := c.LoadConfigFiles(path); err != nil {
+		return nil, err
+	}
 
-	if path != "" {
-		if err := c.LoadConfigFiles(path); err != nil {
-			return nil, err
-		}
+	if err := c.LoadEnvFiles(pathEnv); err != nil {
+		return nil, err
 	}
 
 	var cfg Config
 	if err := c.Unmarshal(&cfg); err != nil {
 		return nil, err
 	}
+
+	cfg.Telegram.Token = os.Getenv("TELEGRAM_TOKEN")
+	cfg.Telegram.BotUsername = os.Getenv("TELEGRAM_BOT_USERNAME")
 
 	return &cfg, nil
 }

@@ -52,6 +52,7 @@ RUN echo "Debug stage cache bust: $CACHEBUST"
 COPY --from=api-builder /app/main .
 COPY --from=api-builder /go/bin/dlv /usr/local/bin/dlv
 COPY config.yaml .
+COPY .env .
 COPY templates ./templates
 
 # Очищаем кэш перед запуском
@@ -78,7 +79,8 @@ RUN echo "Debug stage cache bust: $CACHEBUST"
 # Копируем бинарь Worker, delve, конфиг и шаблоны
 COPY --from=worker-builder /app/main .
 COPY --from=worker-builder /go/bin/dlv /usr/local/bin/dlv
-COPY config_worker.yaml ./config.yaml
+COPY config_worker.yaml ./config_worker.yaml
+COPY .env .
 COPY templates ./templates
 
 # Очищаем кэш перед запуском
