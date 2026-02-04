@@ -44,7 +44,7 @@ func main() {
 	publisher := message_queue.NewMessageQueuePublisher(
 		cfg.RabbitMQ.URL,
 		"notifier-publisher",
-		"notifications_exchange",
+		"delayed_exchange",
 		"notifications_key",
 	)
 
@@ -60,8 +60,16 @@ func main() {
 	defer cancelConsumer()
 
 	go func() {
+		zlog.Logger.Info().Msg("Starting RabbitMQ producer")
+		if err := publisher.Start(); err != nil {
+			zlog.Logger.Error().Err(err).Msg("Publisher error")
+		}
+	}()
+
+	go func() {
 		zlog.Logger.Info().Msg("Starting RabbitMQ consumer")
-		if err := consumer.Start(ctxConsumer); err != nil {
+		err := <-consumer.Start(ctxConsumer)
+		if err != nil {
 			zlog.Logger.Error().Err(err).Msg("Consumer error")
 		}
 	}()

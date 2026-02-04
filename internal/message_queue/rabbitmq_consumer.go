@@ -2,35 +2,40 @@ package message_queue
 
 import (
 	"DelayedNotifier/internal/model"
+	"DelayedNotifier/internal/service"
+	"DelayedNotifier/internal/shared"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/rabbitmq/amqp091-go"
 	"github.com/wb-go/wbf/rabbitmq"
 	"github.com/wb-go/wbf/retry"
 	"github.com/wb-go/wbf/zlog"
-
-	"DelayedNotifier/internal/shared"
 )
 
 type MessageQueueConsumer struct {
 	consumer *rabbitmq.Consumer
-	service  *shared.NotificationQueueProcessor
+	// Store processor as interface value, not a pointer to interface
+	service shared.NotificationQueueProcessor
+	client  *rabbitmq.RabbitClient
 }
 
+const attemptsInf int = 1 << 32
+
 func NewMessageQueueConsumer(url, connectionName string, processor shared.NotificationQueueProcessor) *MessageQueueConsumer {
-	cfg := rabbitmq.ClientConfig{
+	config := rabbitmq.ClientConfig{
 		URL:            url,
 		ConnectionName: connectionName,
 		ConnectTimeout: 0,
 		Heartbeat:      0,
-		ReconnectStrat: retry.Strategy{},
-		ProducingStrat: retry.Strategy{},
-		ConsumingStrat: retry.Strategy{},
+		ReconnectStrat: retry.Strategy{Attempts: attemptsInf, Delay: 5, Backoff: 1},
+		ProducingStrat: retry.Strategy{Attempts: 1, Delay: 10, Backoff: 2},
+		ConsumingStrat: retry.Strategy{Attempts: 1, Delay: 10, Backoff: 2},
 	}
 
-	rabbitClient, err := rabbitmq.NewClient(cfg)
+	rabbitClient, err := rabbitmq.NewClient(config)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create RabbitMQ client: %v", err))
 	}
@@ -39,8 +44,8 @@ func NewMessageQueueConsumer(url, connectionName string, processor shared.Notifi
 		Queue:         "notifications_queue",
 		ConsumerTag:   "notification_consumer",
 		AutoAck:       false,
-		Ask:           rabbitmq.AskConfig{},
-		Nack:          rabbitmq.NackConfig{},
+		Ask:           rabbitmq.AskConfig{Multiple: false},
+		Nack:          rabbitmq.NackConfig{Multiple: false, Requeue: true},
 		Args:          nil,
 		Workers:       1,
 		PrefetchCount: 10,
@@ -59,25 +64,38 @@ func NewMessageQueueConsumer(url, connectionName string, processor shared.Notifi
 		}
 
 		processNotificationError := processor.ProcessNotificationFromQueue(ctx, notification)
-		if processNotificationError != nil {
-			_ = delivery.Nack(false, true)
+		if processNotificationError != nil &&
+			!errors.Is(processNotificationError, service.NotificationCancelledError) {
 			return processNotificationError
 		}
 
-		err := delivery.Ack(false)
-		if err != nil {
-			fmt.Printf("Failed to ack message: %v\n", err)
-			return err
-		}
 		return nil
 	})
 
 	queueConsumer.consumer = consumer
-	queueConsumer.service = &processor
+	queueConsumer.service = processor
+	queueConsumer.client = rabbitClient
 
 	return queueConsumer
 }
 
-func (c *MessageQueueConsumer) Start(ctx context.Context) error {
-	return c.consumer.Start(ctx)
+func (c *MessageQueueConsumer) Start(ctx context.Context) <-chan error {
+	chanError := make(chan error)
+	go func() {
+		err := c.client.DeclareQueue(
+			"notifications_queue",
+			"delayed_exchange",
+			"notifications_key",
+			true,
+			false,
+			false,
+			nil,
+		)
+		if err != nil {
+			chanError <- err
+			return
+		}
+		chanError <- c.consumer.Start(ctx)
+	}()
+	return chanError
 }

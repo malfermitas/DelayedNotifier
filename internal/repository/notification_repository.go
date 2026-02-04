@@ -13,6 +13,7 @@ import (
 type NotificationRepository interface {
 	Save(notification *model.Notification) error
 	GetByID(id string) (*model.Notification, error)
+	GetAll() ([]*model.Notification, error)
 	UpdateStatus(id string, status model.NotificationStatus) error
 	Remove(id string) error
 }
@@ -93,6 +94,43 @@ func (n notificationRepository) GetByID(id string) (*model.Notification, error) 
 	n.logger.Info().Str("id", id).Msg("notification retrieved")
 
 	return notification, nil
+}
+
+func (n notificationRepository) GetAll() ([]*model.Notification, error) {
+	query := `
+		SELECT id, message, send_at, status, channel, created_at, updated_at, retry_count
+		FROM notifications 
+		ORDER BY created_at DESC
+	`
+
+	rows, err := n.db.QueryContext(context.Background(), query)
+	if err != nil {
+		n.logger.Error().Str("error", err.Error()).Msg("failed to get all notifications")
+		return nil, err
+	}
+	defer rows.Close()
+
+	notifications := make([]*model.Notification, 0)
+	for rows.Next() {
+		notification := &model.Notification{}
+		err := rows.Scan(
+			&notification.ID,
+			&notification.Message,
+			&notification.SendAt,
+			&notification.Status,
+			&notification.Channel,
+			&notification.CreatedAt,
+			&notification.UpdatedAt,
+			&notification.RetryCount,
+		)
+		if err != nil {
+			n.logger.Error().Str("error", err.Error()).Msg("failed to scan notification")
+			return nil, err
+		}
+		notifications = append(notifications, notification)
+	}
+
+	return notifications, nil
 }
 
 func (n notificationRepository) UpdateStatus(id string, status model.NotificationStatus) error {

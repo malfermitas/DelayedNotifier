@@ -12,6 +12,7 @@ type NotificationHandler interface {
 	CreateNotification(ctx *ginext.Context)
 	GetNotificationStatus(ctx *ginext.Context)
 	CancelNotification(ctx *ginext.Context)
+	Index(ctx *ginext.Context)
 }
 type notificationHandler struct {
 	service service.NotificationService
@@ -79,4 +80,16 @@ func (h notificationHandler) CancelNotification(ctx *ginext.Context) {
 	}
 
 	ctx.Status(http.StatusOK)
+}
+
+func (h notificationHandler) Index(ctx *ginext.Context) {
+	notifications, err := h.service.GetAllNotifications(ctx.Request.Context())
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.HTML(http.StatusOK, "index.html", gin.H{
+		"notifications": notifications,
+	})
 }

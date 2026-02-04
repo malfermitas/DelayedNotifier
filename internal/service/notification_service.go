@@ -15,6 +15,7 @@ import (
 type NotificationService interface {
 	CreateNotification(ctx context.Context, message, sendAt, channel string) (string, error)
 	GetNotificationById(ctx context.Context, id string) (*model.Notification, error)
+	GetAllNotifications(ctx context.Context) ([]*model.Notification, error)
 	DeleteNotificationById(ctx context.Context, id string) error
 	MarkNotificationAsCancelled(ctx context.Context, id string) error
 	ProcessNotificationFromQueue(ctx context.Context, notification model.Notification) error
@@ -42,9 +43,13 @@ func (n notificationService) CreateNotification(
 	channel string,
 ) (string, error) {
 	notificationId := helpers.CreateUUID()
-	sendAtTime, conversionError := time.Parse("2006-01-02 15:04:05", sendAt)
+	sendAtTime, conversionError := time.Parse(time.RFC3339, sendAt)
 	if conversionError != nil {
-		return "", conversionError
+		// Fallback to old format if needed, but RFC3339 is preferred now
+		sendAtTime, conversionError = time.Parse("2006-01-02 15:04:05", sendAt)
+		if conversionError != nil {
+			return "", conversionError
+		}
 	}
 
 	notificationChannel := model.NotificationChannel(channel)
@@ -67,7 +72,7 @@ func (n notificationService) CreateNotification(
 		return "", err
 	}
 
-	err = n.publisher.PublishNotificationID(ctx, notification.ID, notification.SendAt)
+	err = n.publisher.PublishNotification(ctx, notification)
 	if err != nil {
 		return "", err
 	}
@@ -86,6 +91,10 @@ func (n notificationService) GetNotificationById(
 ) (*model.Notification, error) {
 	notification, err := n.repo.GetByID(id)
 	return notification, err
+}
+
+func (n notificationService) GetAllNotifications(ctx context.Context) ([]*model.Notification, error) {
+	return n.repo.GetAll()
 }
 
 func (n notificationService) DeleteNotificationById(ctx context.Context, id string) error {
