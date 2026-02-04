@@ -1,0 +1,19 @@
+database:
+  host: "localhost"
+  port: "5432"
+  user: "user"
+  password: "password"
+  name: "delayed_notifier"
+
+rabbitmq:
+  url: "amqp://guest:guest@localhost:5672/"
+
+telegram:
+  token: "your_bot_token"
+
+email:
+  smtp_host: "smtp.example.com"
+  smtp_port: 587
+  username: "user@example.com"
+  password: "password"
+  from: "no-reply@example.com"
