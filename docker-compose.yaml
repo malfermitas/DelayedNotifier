@@ -1,0 +1,76 @@
+
+services:
+  api:
+    build:
+      context: .
+      target: debug-api
+    ports:
+      - "8080:8080"
+      - "40000:40000"
+    security_opt:
+      - "seccomp:unconfined"
+    environment:
+      - APP_DATABASE_HOST=db
+      - APP_DATABASE_PORT=5432
+      - APP_DATABASE_USER=user
+      - APP_DATABASE_PASSWORD=password
+      - APP_DATABASE_NAME=delayed_notifier
+      - APP_RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      target: debug-worker
+    ports:
+      - "40001:40001"
+      - "40002:40002"
+    security_opt:
+      - "seccomp:unconfined"
+    environment:
+      - APP_DATABASE_HOST=db
+      - APP_DATABASE_PORT=5432
+      - APP_DATABASE_USER=user
+      - APP_DATABASE_PASSWORD=password
+      - APP_DATABASE_NAME=delayed_notifier
+      - APP_RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=delayed_notifier
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./internal/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d delayed_notifier"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    build: ./rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

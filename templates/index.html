@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notification Manager</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Подключаем стили flatpickr -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <style>
+        body { padding: 20px; }
+        .status-scheduled { color: blue; }
+        .status-sent { color: green; }
+        .status-cancelled { color: gray; }
+        .status-failed { color: red; }
+    </style>
+</head>
+<body data-bot-username="">
+<div class="container">
+    <h1>Delayed Notifier</h1>
+
+    <div class="card mb-4">
+        <div class="card-header">Create Notification</div>
+        <div class="card-body">
+            <form id="createForm">
+                <div class="mb-3">
+                    <label for="message" class="form-label">Message</label>
+                    <input type="text" class="form-control" id="message" required>
+                </div>
+                <div class="mb-3">
+                    <label for="send_at" class="form-label">Send At</label>
+                    <!-- Заменяем input на более понятный вид, JS сам добавит календарь -->
+                    <input type="text" class="form-control" id="send_at" placeholder="Select date and time" required>
+                </div>
+                <div class="mb-3">
+                    <label for="channel" class="form-label">Channel</label>
+                    <select class="form-select" id="channel">
+                        <option value="telegram">Telegram</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Schedule</button>
+            </form>
+            <div class="d-flex justify-content-start mb-3">
+                <a id="bindBotBtn" class="btn btn-secondary" href="#" role="button">Open Telegram Bot</a>
+            </div>
+        </div>
+    </div>
+
+    <h3>Existing Notifications</h3>
+    <table class="table table-striped">
+        <thead>
+        <tr>
+            <th>ID</th>
+            <th>Message</th>
+            <th>Send At</th>
+            <th>Channel</th>
+            <th>Status</th>
+            <th>Actions</th>
+        </tr>
+        </thead>
+        <tbody id="notificationTable">
+        {{range .notifications}}
+        <tr>
+            <td>{{.ID}}</td>
+            <td>{{.Message}}</td>
+            <td class="send-at-local" data-utc="{{ .SendAt.Unix }}">{{ .SendAt.Format "2006-01-02 15:04:05" }}</td>
+            <td>{{.Channel}}</td>
+            <td class="status-{{.Status}}">{{.Status}}</td>
+            <td>
+                {{if eq .Status "scheduled"}}
+                <button class="btn btn-sm btn-danger" onclick="cancelNotification('{{.ID}}')">Cancel</button>
+                {{end}}
+            </td>
+        </tr>
+        {{end}}
+        </tbody>
+    </table>
+</div>
+
+<!-- Подключаем flatpickr -->
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+    // Инициализируем date picker при загрузке страницы
+    const fp = flatpickr("#send_at", {
+        enableTime: true,
+        dateFormat: "Y-m-d H:i:S",
+        time_24hr: true,
+        defaultHour: 12,
+        minuteIncrement: 1
+    });
+
+    document.getElementById('createForm').onsubmit = async (e) => {
+        e.preventDefault();
+        
+        const selectedDate = fp.selectedDates[0];
+        if (!selectedDate) {
+            alert('Please select a date');
+            return;
+        }
+
+        // Форматируем дату в ISO 8601 с учетом локального часового пояса
+        const offset = -selectedDate.getTimezoneOffset();
+        const absOffset = Math.abs(offset);
+        const pad = (num) => String(num).padStart(2, '0');
+        const timezoneStr = (offset >= 0 ? "+" : "-") + 
+                            pad(Math.floor(absOffset / 60)) + ":" + 
+                            pad(absOffset % 60);
+        
+        // Ручная сборка ISO строки с локальным смещением
+        const year = selectedDate.getFullYear();
+        const month = pad(selectedDate.getMonth() + 1);
+        const day = pad(selectedDate.getDate());
+        const hours = pad(selectedDate.getHours());
+        const minutes = pad(selectedDate.getMinutes());
+        const seconds = pad(selectedDate.getSeconds());
+        
+        const isoString = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${timezoneStr}`;
+
+        const data = {
+            message: document.getElementById('message').value,
+            send_at: isoString,
+            channel: document.getElementById('channel').value
+        };
+        // Read session cookie and pass it via header; ensure cookies are sent
+        function getCookie(name) {
+            const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+            return m ? m.pop() : null;
+        }
+        const session = getCookie('dtn_session');
+        const response = await fetch('/notify', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Session': session || ''
+            },
+            credentials: 'include',
+            body: JSON.stringify(data)
+        });
+        if (response.ok) {
+            location.reload();
+        } else {
+            const err = await response.json();
+            alert('Error: ' + err.error);
+        }
+    };
+
+    async function cancelNotification(id) {
+        if (!confirm('Are you sure?')) return;
+        const response = await fetch('/notify/' + id, {
+            method: 'DELETE'
+        });
+        if (response.ok) {
+            location.reload();
+        } else {
+            alert('Failed to cancel');
+        }
+    }
+
+    // Convert UTC times to local time for display
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('.send-at-local').forEach(el => {
+            const unixTimestamp = el.getAttribute('data-utc');
+            if (unixTimestamp) {
+                const date = new Date(parseInt(unixTimestamp) * 1000);
+                if (!isNaN(date)) {
+                    const pad = (num) => String(num).padStart(2, '0');
+                    const formatted = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+                    el.textContent = formatted;
+                }
+            }
+        });
+    });
+        </script>
+        <script>
+        (function() {
+          function getCookie(name) {
+            const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+            return m ? m.pop() : null;
+          }
+          function setCookie(name, value, days) {
+            const d = new Date();
+            d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000));
+            document.cookie = name + '=' + encodeURIComponent(value) + '; expires=' + d.toUTCString() + '; path=/';
+          }
+
+          var session = getCookie('dtn_session');
+          if (!session) {
+            session = 'sess_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+            setCookie('dtn_session', session, 365);
+          }
+
+          var botUsername = document.body.dataset.botUsername || document.body.getAttribute('data-bot-username') || 'BOT_USERNAME';
+          var btn = document.getElementById('bindBotBtn');
+          if (btn) {
+            btn.href = 'https://t.me/' + botUsername + '?start=' + encodeURIComponent(session);
+            btn.target = '_blank';
+          }
+        })();
+        </script>
+        </body>
+</html>

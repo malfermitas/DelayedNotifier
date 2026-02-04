@@ -10,12 +10,13 @@ type NotificationQueueProcessor interface {
 }
 
 type NotificationService interface {
-	CreateNotification(ctx context.Context, message, sendAt, channel string) (string, error)
+	CreateNotification(ctx context.Context, message, sendAt, channel, email, userCookie string) (string, error)
 	GetNotificationById(ctx context.Context, id string) (*model.Notification, error)
 	GetAllNotifications(ctx context.Context) ([]*model.Notification, error)
 	DeleteNotificationById(ctx context.Context, id string) error
 	MarkNotificationAsCancelled(ctx context.Context, id string) error
 	ProcessNotificationResult(ctx context.Context, result model.NotificationResult) error
+	ReadChatData(chatID int64, cookie string)
 }
 
 type MessageQueuePublisher interface {
@@ -31,4 +32,8 @@ type MessageQueueConsumer interface {
 
 type ResultPublisher interface {
 	PublishResult(result model.NotificationResult) error
+}
+
+type TelegramChatIDReader interface {
+	ReadChatData(chatID int64, cookie string)
 }

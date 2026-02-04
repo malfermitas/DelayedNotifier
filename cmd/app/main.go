@@ -7,6 +7,7 @@ import (
 	"DelayedNotifier/internal/message_queue"
 	"DelayedNotifier/internal/message_queue/message_queue_result"
 	"DelayedNotifier/internal/repository"
+	"DelayedNotifier/internal/sender/telegram"
 	"DelayedNotifier/internal/service"
 	"context"
 	"errors"
@@ -50,8 +51,17 @@ func main() {
 	)
 
 	// 5. Init Layers
+	chatIdsRepo := repository.NewChatIdsRepository(db)
 	repo := repository.NewNotificationRepository(db, &zlog.Logger)
-	svc := service.NewNotificationService(repo, publisher)
+	svc := service.NewNotificationService(repo, chatIdsRepo, publisher)
+
+	telegramReader, telegramReaderInitErr := telegram.NewTelegramReader(svc, cfg.Telegram.Token)
+	go func() {
+		telegramReader.Run()
+		if telegramReaderInitErr != nil {
+			zlog.Logger.Error().Err(telegramReaderInitErr).Msg("Failed to initialize telegram reader")
+		}
+	}()
 
 	// 6. Init Result Consumer
 	resultConsumer := message_queue_result.NewMessageQueueResultConsumer(

@@ -6,6 +6,7 @@ import (
 	"DelayedNotifier/internal/message_queue/message_queue_result"
 	"DelayedNotifier/internal/repository"
 	"DelayedNotifier/internal/sender"
+	"DelayedNotifier/internal/sender/telegram"
 	"DelayedNotifier/internal/service"
 	"context"
 	"fmt"
@@ -47,16 +48,14 @@ func main() {
 	// 4. Init Senders
 	emailSender, emailSenderInitErr := sender.NewEmailSender(emailSenderConfig)
 	if emailSenderInitErr != nil {
-		zlog.Logger.Error().Err(emailSenderInitErr).Msg("Failed to initialize email sender")
+		zlog.Logger.Error().Err(emailSenderInitErr).Msg("Failed to initialize email telegram")
 	}
 
-	telegramSender, telegramSenderInitErr := sender.NewTelegramSender(cfg.Telegram.Token)
-	go func() {
-		telegramSender.Run()
-		if telegramSenderInitErr != nil {
-			zlog.Logger.Error().Err(telegramSenderInitErr).Msg("Failed to initialize telegram sender")
-		}
-	}()
+	// Для отправки уведомлений в Telegram бота
+	telegramSender, telegramSenderInitErr := telegram.NewTelegramSender(cfg.Telegram.Token)
+	if telegramSenderInitErr != nil {
+		zlog.Logger.Error().Err(telegramSenderInitErr).Msg("Failed to initialize telegram")
+	}
 
 	resultPublisher := message_queue_result.NewMessageQueueResultPublisher(
 		cfg.RabbitMQ.URL,
