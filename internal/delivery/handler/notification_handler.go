@@ -26,6 +26,7 @@ type CreateNotificationRequest struct {
 	Message string `json:"message" binding:"required"`
 	SendAt  string `json:"send_at" binding:"required"`
 	Channel string `json:"channel" binding:"required"`
+	Email   string `json:"email"`
 }
 
 // CreateNotification – POST /notify — создание уведомлений с датой и временем отправки
@@ -36,11 +37,19 @@ func (h notificationHandler) CreateNotification(ctx *ginext.Context) {
 		return
 	}
 
+	sessionCookie := ctx.GetHeader("X-Session")
+
+	if sessionCookie == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Bad Request"})
+	}
+
 	notificationId, err := h.service.CreateNotification(
 		ctx.Request.Context(),
 		req.Message,
 		req.SendAt,
 		req.Channel,
+		req.Email,
+		sessionCookie,
 	)
 
 	if err != nil {

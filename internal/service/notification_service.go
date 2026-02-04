@@ -6,6 +6,7 @@ import (
 	"DelayedNotifier/internal/shared"
 	"context"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/wb-go/wbf/helpers"
@@ -13,18 +14,20 @@ import (
 )
 
 type notificationService struct {
-	repo            repository.NotificationRepository
-	publisher       shared.MessageQueuePublisher
-	resultPublisher shared.ResultPublisher
+	notificationRepo repository.NotificationRepository
+	chatIdsRepo      repository.ChatIdsRepository
+	publisher        shared.MessageQueuePublisher
 }
 
 func NewNotificationService(
-	repo repository.NotificationRepository,
+	notificationRepo repository.NotificationRepository,
+	chatIdsRepo repository.ChatIdsRepository,
 	publisher shared.MessageQueuePublisher,
 ) shared.NotificationService {
 	return notificationService{
-		repo:      repo,
-		publisher: publisher,
+		notificationRepo: notificationRepo,
+		chatIdsRepo:      chatIdsRepo,
+		publisher:        publisher,
 	}
 }
 
@@ -32,11 +35,14 @@ var NotificationCancelledError = errors.New("notification cancelled")
 
 // CreateNotification creates a new notification with the provided message, send time, and channel.
 // It returns the ID of the created notification or an error if the operation fails.
+// User cookie is used to link it to telegram chat id
 func (n notificationService) CreateNotification(
 	ctx context.Context,
 	message,
 	sendAt,
 	channel string,
+	email string,
+	userCookie string,
 ) (string, error) {
 	notificationId := helpers.CreateUUID()
 	sendAtTime, conversionError := time.Parse(time.RFC3339, sendAt)
@@ -46,6 +52,17 @@ func (n notificationService) CreateNotification(
 		if conversionError != nil {
 			return "", conversionError
 		}
+	}
+
+	telegramChatID, err := n.chatIdsRepo.Get(userCookie)
+	if err != nil {
+		zlog.Logger.Error().
+			Str("telegramChatID", telegramChatID).
+			Str("cookie", userCookie).
+			Err(err).
+			Msg("Failed to get telegram chat id for cookie")
+
+		return "", err
 	}
 
 	notificationChannel := model.NotificationChannel(channel)
@@ -59,22 +76,24 @@ func (n notificationService) CreateNotification(
 		message,
 		sendAtTime,
 		notificationChannel,
+		email,
+		telegramChatID,
 	)
 
 	notification.Status = model.StatusPending
 
-	err := n.repo.Save(notification)
+	err = n.notificationRepo.Save(notification)
 	if err != nil {
 		return "", err
 	}
 
 	err = n.publisher.PublishNotification(ctx, notification)
 	if err != nil {
-		_ = n.repo.UpdateStatus(notificationId, model.StatusFailed)
+		_ = n.notificationRepo.UpdateStatus(notificationId, model.StatusFailed)
 		return "", err
 	}
 
-	err = n.repo.UpdateStatus(notification.ID, model.StatusScheduled)
+	err = n.notificationRepo.UpdateStatus(notification.ID, model.StatusScheduled)
 	if err != nil {
 		return "", err
 	}
@@ -86,29 +105,41 @@ func (n notificationService) GetNotificationById(
 	ctx context.Context,
 	id string,
 ) (*model.Notification, error) {
-	notification, err := n.repo.GetByID(id)
+	notification, err := n.notificationRepo.GetByID(id)
 	return notification, err
 }
 
 func (n notificationService) GetAllNotifications(ctx context.Context) ([]*model.Notification, error) {
-	return n.repo.GetAll()
+	return n.notificationRepo.GetAll()
 }
 
 func (n notificationService) DeleteNotificationById(ctx context.Context, id string) error {
-	err := n.repo.Remove(id)
+	err := n.notificationRepo.Remove(id)
 	return err
 }
 
 func (n notificationService) MarkNotificationAsCancelled(ctx context.Context, id string) error {
-	return n.repo.UpdateStatus(id, model.StatusCancelled)
+	return n.notificationRepo.UpdateStatus(id, model.StatusCancelled)
 }
 
 func (n notificationService) ProcessNotificationResult(ctx context.Context, result model.NotificationResult) error {
-	err := n.repo.UpdateStatus(result.ID, result.Status)
+	err := n.notificationRepo.UpdateStatus(result.ID, result.Status)
 	if err != nil {
 		zlog.Logger.Error().Str("notification_id", result.ID).Str("status", string(result.Status))
 		return err
 	}
 	zlog.Logger.Info().Str("notification_id", result.ID).Msg("notification processed")
 	return nil
+}
+
+func (n notificationService) ReadChatData(chatID int64, cookie string) {
+	zlog.Logger.Info().Int64("chat_id", chatID).Str("cookie", cookie).Msg("read chat")
+	err := n.chatIdsRepo.Set(cookie, strconv.FormatInt(chatID, 10))
+	if err != nil {
+		zlog.Logger.Error().
+			Int64("chat_id", chatID).
+			Str("cookie", cookie).
+			Err(err).
+			Msg("could not save chat id to database")
+	}
 }

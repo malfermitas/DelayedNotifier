@@ -2,8 +2,6 @@ package model
 
 import (
 	"time"
-
-	"github.com/wb-go/wbf/helpers"
 )
 
 type NotificationChannel string
@@ -44,7 +42,14 @@ type Notification struct {
 	RetryCount int                 `json:"retry_count" db:"retry_count"`
 }
 
-func NewNotification(id, message string, sendAt time.Time, channel NotificationChannel) *Notification {
+func NewNotification(
+	id,
+	message string,
+	sendAt time.Time,
+	channel NotificationChannel,
+	email string,
+	telegramChatID string,
+) *Notification {
 	now := time.Now()
 	return &Notification{
 		ID:         id,
@@ -52,21 +57,8 @@ func NewNotification(id, message string, sendAt time.Time, channel NotificationC
 		SendAt:     sendAt,
 		Status:     StatusPending,
 		Channel:    channel,
-		CreatedAt:  now,
-		UpdatedAt:  now,
-		RetryCount: 0,
-	}
-}
-
-func NewNotificationGenerateUUID(message string, sendAt time.Time, channel NotificationChannel) *Notification {
-	now := time.Now()
-	uuid := helpers.CreateUUID()
-	return &Notification{
-		ID:         uuid,
-		Message:    message,
-		SendAt:     sendAt,
-		Status:     StatusPending,
-		Channel:    channel,
+		Email:      email,
+		TelegramID: telegramChatID,
 		CreatedAt:  now,
 		UpdatedAt:  now,
 		RetryCount: 0,
