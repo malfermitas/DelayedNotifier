@@ -15,7 +15,7 @@ import (
 	"github.com/wb-go/wbf/zlog"
 )
 
-type MessageQueueConsumer struct {
+type messageQueueConsumer struct {
 	consumer *rabbitmq.Consumer
 	// Store processor as interface value, not a pointer to interface
 	service shared.NotificationQueueProcessor
@@ -24,7 +24,7 @@ type MessageQueueConsumer struct {
 
 const attemptsInf int = 1 << 32
 
-func NewMessageQueueConsumer(url, connectionName string, processor shared.NotificationQueueProcessor) *MessageQueueConsumer {
+func NewMessageQueueConsumer(url, connectionName string, processor shared.NotificationQueueProcessor) shared.MessageQueueConsumer {
 	config := rabbitmq.ClientConfig{
 		URL:            url,
 		ConnectionName: connectionName,
@@ -51,7 +51,7 @@ func NewMessageQueueConsumer(url, connectionName string, processor shared.Notifi
 		PrefetchCount: 10,
 	}
 
-	queueConsumer := &MessageQueueConsumer{}
+	queueConsumer := &messageQueueConsumer{}
 
 	consumer := rabbitmq.NewConsumer(rabbitClient, consumerConfig, func(ctx context.Context, delivery amqp091.Delivery) error {
 		zlog.Logger.Debug().Str("body", string(delivery.Body)).Msg("Received notification")
@@ -79,10 +79,24 @@ func NewMessageQueueConsumer(url, connectionName string, processor shared.Notifi
 	return queueConsumer
 }
 
-func (c *MessageQueueConsumer) Start(ctx context.Context) <-chan error {
+func (c *messageQueueConsumer) Start(ctx context.Context) <-chan error {
 	chanError := make(chan error)
 	go func() {
-		err := c.client.DeclareQueue(
+		err := c.client.DeclareExchange(
+			"delayed_exchange",
+			"x-delayed-message",
+			true,
+			true,
+			false,
+			amqp091.Table{"x-delayed-type": "direct"},
+		)
+		if err != nil {
+			zlog.Logger.Error().Err(err).Msg("Failed to declare exchange")
+			chanError <- err
+			return
+		}
+
+		err = c.client.DeclareQueue(
 			"notifications_queue",
 			"delayed_exchange",
 			"notifications_key",
@@ -98,4 +112,12 @@ func (c *MessageQueueConsumer) Start(ctx context.Context) <-chan error {
 		chanError <- c.consumer.Start(ctx)
 	}()
 	return chanError
+}
+
+func (c *messageQueueConsumer) Close() error {
+	err := c.client.Close()
+	if err != nil {
+		return err
+	}
+	return nil
 }

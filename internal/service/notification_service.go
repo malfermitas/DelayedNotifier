@@ -1,9 +1,9 @@
 package service
 
 import (
-	"DelayedNotifier/internal/message_queue"
 	"DelayedNotifier/internal/model"
 	"DelayedNotifier/internal/repository"
+	"DelayedNotifier/internal/shared"
 	"context"
 	"errors"
 	"time"
@@ -12,20 +12,16 @@ import (
 	"github.com/wb-go/wbf/zlog"
 )
 
-type NotificationService interface {
-	CreateNotification(ctx context.Context, message, sendAt, channel string) (string, error)
-	GetNotificationById(ctx context.Context, id string) (*model.Notification, error)
-	GetAllNotifications(ctx context.Context) ([]*model.Notification, error)
-	DeleteNotificationById(ctx context.Context, id string) error
-	MarkNotificationAsCancelled(ctx context.Context, id string) error
-	ProcessNotificationFromQueue(ctx context.Context, notification model.Notification) error
-}
 type notificationService struct {
-	repo      repository.NotificationRepository
-	publisher *message_queue.MessageQueuePublisher
+	repo            repository.NotificationRepository
+	publisher       shared.MessageQueuePublisher
+	resultPublisher shared.ResultPublisher
 }
 
-func NewNotificationService(repo repository.NotificationRepository, publisher *message_queue.MessageQueuePublisher) NotificationService {
+func NewNotificationService(
+	repo repository.NotificationRepository,
+	publisher shared.MessageQueuePublisher,
+) shared.NotificationService {
 	return notificationService{
 		repo:      repo,
 		publisher: publisher,
@@ -74,6 +70,7 @@ func (n notificationService) CreateNotification(
 
 	err = n.publisher.PublishNotification(ctx, notification)
 	if err != nil {
+		_ = n.repo.UpdateStatus(notificationId, model.StatusFailed)
 		return "", err
 	}
 
@@ -106,29 +103,12 @@ func (n notificationService) MarkNotificationAsCancelled(ctx context.Context, id
 	return n.repo.UpdateStatus(id, model.StatusCancelled)
 }
 
-func (n notificationService) ProcessNotificationFromQueue(ctx context.Context, notification model.Notification) error {
-	notificationFromDB, err := n.repo.GetByID(notification.ID)
+func (n notificationService) ProcessNotificationResult(ctx context.Context, result model.NotificationResult) error {
+	err := n.repo.UpdateStatus(result.ID, result.Status)
 	if err != nil {
+		zlog.Logger.Error().Str("notification_id", result.ID).Str("status", string(result.Status))
 		return err
 	}
-
-	if notificationFromDB.Status == model.StatusCancelled {
-		return NotificationCancelledError
-	}
-
-	switch notification.Channel {
-	case model.EmailChannel:
-		// TODO: send email
-	case model.TelegramChannel:
-		// TODO: send telegram message
-	}
-
-	err = n.repo.UpdateStatus(notification.ID, model.StatusSent)
-	if err != nil {
-		return err
-	}
-
-	zlog.Logger.Info().Str("id", notification.ID).Msg("Notification sent")
-
+	zlog.Logger.Info().Str("notification_id", result.ID).Msg("notification processed")
 	return nil
 }

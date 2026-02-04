@@ -2,6 +2,7 @@ package message_queue
 
 import (
 	"DelayedNotifier/internal/model"
+	"DelayedNotifier/internal/shared"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -13,13 +14,13 @@ import (
 	"github.com/wb-go/wbf/zlog"
 )
 
-type MessageQueuePublisher struct {
+type messageQueuePublisher struct {
 	client     *rabbitmq.RabbitClient
 	publisher  *rabbitmq.Publisher
 	routingKey string
 }
 
-func NewMessageQueuePublisher(url, connectionName, exchange, routingKey string) *MessageQueuePublisher {
+func NewMessageQueuePublisher(url, connectionName, exchange, routingKey string) shared.MessageQueuePublisher {
 	cfg := rabbitmq.ClientConfig{
 		URL:            url,
 		ConnectionName: connectionName,
@@ -37,14 +38,14 @@ func NewMessageQueuePublisher(url, connectionName, exchange, routingKey string) 
 
 	publisher := rabbitmq.NewPublisher(rabbitClient, exchange, routingKey)
 
-	return &MessageQueuePublisher{
+	return &messageQueuePublisher{
 		client:     rabbitClient,
 		publisher:  publisher,
 		routingKey: routingKey,
 	}
 }
 
-func (p *MessageQueuePublisher) Start() error {
+func (p *messageQueuePublisher) Start() error {
 	err := p.client.DeclareExchange(
 		"delayed_exchange",
 		"x-delayed-message",
@@ -75,7 +76,7 @@ func (p *MessageQueuePublisher) Start() error {
 	return nil
 }
 
-func (p *MessageQueuePublisher) Publish(ctx context.Context, body []byte) error {
+func (p *messageQueuePublisher) Publish(ctx context.Context, body []byte) error {
 	return p.publisher.Publish(
 		ctx,
 		body,
@@ -83,7 +84,7 @@ func (p *MessageQueuePublisher) Publish(ctx context.Context, body []byte) error 
 	)
 }
 
-func (p *MessageQueuePublisher) PublishDelayed(ctx context.Context, body []byte, delay time.Duration) error {
+func (p *messageQueuePublisher) PublishDelayed(ctx context.Context, body []byte, delay time.Duration) error {
 	opts := make([]rabbitmq.PublishOption, 0, 1)
 	if delay > 0 {
 		opts = append(opts, rabbitmq.WithHeaders(amqp091.Table{"x-delay": int(delay.Milliseconds())}))
@@ -97,7 +98,7 @@ func (p *MessageQueuePublisher) PublishDelayed(ctx context.Context, body []byte,
 	)
 }
 
-func (p *MessageQueuePublisher) PublishNotification(ctx context.Context, notification *model.Notification) error {
+func (p *messageQueuePublisher) PublishNotification(ctx context.Context, notification *model.Notification) error {
 	delay := time.Until(notification.SendAt)
 	if delay < 0 {
 		delay = 0
@@ -105,7 +106,8 @@ func (p *MessageQueuePublisher) PublishNotification(ctx context.Context, notific
 
 	body, err := json.Marshal(notification)
 	if err != nil {
-		return fmt.Errorf("failed to marshal notification: %w", err)
+		zlog.Logger.Error().Err(err).Msg("Failed to marshal notification")
+		return err
 	}
 
 	err = p.PublishDelayed(ctx, body, delay)
@@ -118,6 +120,6 @@ func (p *MessageQueuePublisher) PublishNotification(ctx context.Context, notific
 	return nil
 }
 
-func (p *MessageQueuePublisher) Close() error {
+func (p *messageQueuePublisher) Close() error {
 	return p.client.Close()
 }

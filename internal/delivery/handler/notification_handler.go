@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"DelayedNotifier/internal/service"
+	"DelayedNotifier/internal/shared"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -15,10 +15,10 @@ type NotificationHandler interface {
 	Index(ctx *ginext.Context)
 }
 type notificationHandler struct {
-	service service.NotificationService
+	service shared.NotificationService
 }
 
-func NewNotificationHandler(service service.NotificationService) NotificationHandler {
+func NewNotificationHandler(service shared.NotificationService) NotificationHandler {
 	return notificationHandler{service: service}
 }
 
