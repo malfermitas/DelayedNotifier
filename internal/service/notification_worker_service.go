@@ -3,11 +3,9 @@ package service
 import (
 	"DelayedNotifier/internal/model"
 	"DelayedNotifier/internal/repository"
-	"DelayedNotifier/internal/sender"
-	"DelayedNotifier/internal/sender/telegram"
 	"DelayedNotifier/internal/shared"
 	"context"
-	"strconv"
+	"errors"
 	"time"
 
 	"github.com/wb-go/wbf/zlog"
@@ -16,15 +14,15 @@ import (
 type NotificationWorkerService struct {
 	repo            repository.NotificationRepository
 	resultPublisher shared.ResultPublisher
-	emailSender     *sender.EmailSender
-	telegramSender  *telegram.TelegramSender
+	emailSender     shared.Sender
+	telegramSender  shared.Sender
 }
 
 func NewNotificationWorkerService(
 	repo repository.NotificationRepository,
 	resultPublisher shared.ResultPublisher,
-	emailSender *sender.EmailSender,
-	telegramSender *telegram.TelegramSender,
+	emailSender shared.Sender,
+	telegramSender shared.Sender,
 ) *NotificationWorkerService {
 	return &NotificationWorkerService{
 		repo:            repo,
@@ -40,7 +38,7 @@ func (s *NotificationWorkerService) ProcessNotificationFromQueue(ctx context.Con
 		Str("channel", string(notification.Channel)).
 		Msg("Processing notification from queue")
 
-	notificationDB, err := s.repo.GetByID(notification.ID)
+	notificationDB, err := s.repo.GetByID(ctx, notification.ID)
 	if err != nil {
 		zlog.Logger.Error().Str("notification_id", notification.ID).Msg("Failed to get notification from DB")
 		return err
@@ -53,7 +51,7 @@ func (s *NotificationWorkerService) ProcessNotificationFromQueue(ctx context.Con
 
 	// Send notification based on channel
 	startTime := time.Now()
-	err = s.sendNotification(notification)
+	err = s.sendNotification(ctx, notification)
 	duration := time.Since(startTime)
 
 	// Create result
@@ -91,38 +89,23 @@ func (s *NotificationWorkerService) ProcessNotificationFromQueue(ctx context.Con
 	return nil
 }
 
-func (s *NotificationWorkerService) sendNotification(notification model.Notification) error {
+func (s *NotificationWorkerService) sendNotification(ctx context.Context, notification model.Notification) error {
 	switch notification.Channel {
 	case "email":
-		err := s.emailSender.SendEmail(notification.Email, "New notification", notification.Message)
-		if err != nil {
-			zlog.Logger.Error().
-				Err(err).
-				Str("notification_id", notification.ID).
-				Msg("Failed to send email")
-			return err
+		if s.emailSender == nil {
+			return errors.New("email sender not configured")
 		}
+		return s.emailSender.Send(ctx, notification.Email, notification.Message)
 	case "telegram":
-		telegramIDInt64, err := strconv.ParseInt(notification.TelegramID, 10, 64)
-		if err != nil {
-			zlog.Logger.Error().
-				Err(err).
-				Str("telegramId", notification.TelegramID).
-				Msg("Failed to convert telegram ID to int64")
+		if s.telegramSender == nil {
+			return errors.New("telegram sender not configured")
 		}
-		err = s.telegramSender.SendMessage(telegramIDInt64, notification.Message)
-		if err != nil {
-			zlog.Logger.Error().
-				Err(err).
-				Int64("telegramId", telegramIDInt64).
-				Msg("Failed to send telegram message")
-			return err
-		}
+		return s.telegramSender.Send(ctx, notification.TelegramID, notification.Message)
 	default:
 		zlog.Logger.Error().
 			Str("channel", string(notification.Channel)).
 			Str("notification_id", notification.ID).
 			Msg("Unknown notification channel")
+		return errors.New("unknown channel")
 	}
-	return nil
 }

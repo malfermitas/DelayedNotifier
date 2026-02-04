@@ -11,11 +11,11 @@ import (
 )
 
 type NotificationRepository interface {
-	Save(notification *model.Notification) error
-	GetByID(id string) (*model.Notification, error)
-	GetAll() ([]*model.Notification, error)
-	UpdateStatus(id string, status model.NotificationStatus) error
-	Remove(id string) error
+	Save(ctx context.Context, notification *model.Notification) error
+	GetByID(ctx context.Context, id string) (*model.Notification, error)
+	GetAll(ctx context.Context) ([]*model.Notification, error)
+	UpdateStatus(ctx context.Context, id string, status model.NotificationStatus) error
+	Remove(ctx context.Context, id string) error
 }
 
 type notificationRepository struct {
@@ -30,7 +30,7 @@ func NewNotificationRepository(db *dbpg.DB, logger *zlog.Zerolog) NotificationRe
 	}
 }
 
-func (n notificationRepository) Save(notification *model.Notification) error {
+func (n notificationRepository) Save(ctx context.Context, notification *model.Notification) error {
 	query := `
 		INSERT INTO notifications (id, message, send_at, status, channel, created_at, updated_at, retry_count)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -42,7 +42,7 @@ func (n notificationRepository) Save(notification *model.Notification) error {
 			updated_at = EXCLUDED.updated_at,
 			retry_count = EXCLUDED.retry_count
 	`
-	_, err := n.db.ExecContext(context.Background(), query,
+	_, err := n.db.ExecContext(ctx, query,
 		notification.ID,
 		notification.Message,
 		notification.SendAt,
@@ -62,7 +62,7 @@ func (n notificationRepository) Save(notification *model.Notification) error {
 	return nil
 }
 
-func (n notificationRepository) GetByID(id string) (*model.Notification, error) {
+func (n notificationRepository) GetByID(ctx context.Context, id string) (*model.Notification, error) {
 	query := `
 		SELECT id, message, send_at, status, channel, created_at, updated_at, retry_count
 		FROM notifications 
@@ -71,7 +71,7 @@ func (n notificationRepository) GetByID(id string) (*model.Notification, error) 
 
 	notification := &model.Notification{}
 
-	err := n.db.QueryRowContext(context.Background(), query, id).Scan(
+	err := n.db.QueryRowContext(ctx, query, id).Scan(
 		&notification.ID,
 		&notification.Message,
 		&notification.SendAt,
@@ -96,14 +96,14 @@ func (n notificationRepository) GetByID(id string) (*model.Notification, error) 
 	return notification, nil
 }
 
-func (n notificationRepository) GetAll() ([]*model.Notification, error) {
+func (n notificationRepository) GetAll(ctx context.Context) ([]*model.Notification, error) {
 	query := `
 		SELECT id, message, send_at, status, channel, created_at, updated_at, retry_count
 		FROM notifications 
 		ORDER BY created_at DESC
 	`
 
-	rows, err := n.db.QueryContext(context.Background(), query)
+	rows, err := n.db.QueryContext(ctx, query)
 	if err != nil {
 		n.logger.Error().Str("error", err.Error()).Msg("failed to get all notifications")
 		return nil, err
@@ -133,10 +133,10 @@ func (n notificationRepository) GetAll() ([]*model.Notification, error) {
 	return notifications, nil
 }
 
-func (n notificationRepository) UpdateStatus(id string, status model.NotificationStatus) error {
+func (n notificationRepository) UpdateStatus(ctx context.Context, id string, status model.NotificationStatus) error {
 	query := "UPDATE notifications SET status = $1 WHERE id = $2"
 
-	_, err := n.db.ExecContext(context.Background(), query, status, id)
+	_, err := n.db.ExecContext(ctx, query, status, id)
 	if err != nil {
 		n.logger.Error().Str("id", id).Str("error", err.Error()).Msg("failed to update notification status")
 		return err
@@ -144,17 +144,20 @@ func (n notificationRepository) UpdateStatus(id string, status model.Notificatio
 	return nil
 }
 
-func (n notificationRepository) Remove(id string) error {
+func (n notificationRepository) Remove(ctx context.Context, id string) error {
 	query := "DELETE FROM notifications WHERE id = $1"
-	result, err := n.db.ExecContext(context.Background(), query, id)
+	result, err := n.db.ExecContext(ctx, query, id)
 	if err != nil {
 		n.logger.Error().Str("id", id).Str("error", err.Error()).Msg("failed to remove notification")
 		return err
 	}
 
 	rowsAffected, err := result.RowsAffected()
-	if err != nil && rowsAffected == 0 {
-		n.logger.Error().Str("id", id).Str("error", err.Error()).Msg("no notification found to remove")
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		n.logger.Warn().Str("id", id).Msg("no notification found to remove")
 		return sql.ErrNoRows
 	}
 

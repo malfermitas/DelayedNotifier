@@ -54,7 +54,7 @@ func (n notificationService) CreateNotification(
 		}
 	}
 
-	telegramChatID, err := n.chatIdsRepo.Get(userCookie)
+	telegramChatID, err := n.chatIdsRepo.Get(ctx, userCookie)
 	if err != nil {
 		zlog.Logger.Error().
 			Str("telegramChatID", telegramChatID).
@@ -82,18 +82,18 @@ func (n notificationService) CreateNotification(
 
 	notification.Status = model.StatusPending
 
-	err = n.notificationRepo.Save(notification)
+	err = n.notificationRepo.Save(ctx, notification)
 	if err != nil {
 		return "", err
 	}
 
 	err = n.publisher.PublishNotification(ctx, notification)
 	if err != nil {
-		_ = n.notificationRepo.UpdateStatus(notificationId, model.StatusFailed)
+		_ = n.notificationRepo.UpdateStatus(ctx, notificationId, model.StatusFailed)
 		return "", err
 	}
 
-	err = n.notificationRepo.UpdateStatus(notification.ID, model.StatusScheduled)
+	err = n.notificationRepo.UpdateStatus(ctx, notification.ID, model.StatusScheduled)
 	if err != nil {
 		return "", err
 	}
@@ -105,21 +105,21 @@ func (n notificationService) GetNotificationById(
 	ctx context.Context,
 	id string,
 ) (*model.Notification, error) {
-	notification, err := n.notificationRepo.GetByID(id)
+	notification, err := n.notificationRepo.GetByID(ctx, id)
 	return notification, err
 }
 
 func (n notificationService) GetAllNotifications(ctx context.Context) ([]*model.Notification, error) {
-	return n.notificationRepo.GetAll()
+	return n.notificationRepo.GetAll(ctx)
 }
 
 func (n notificationService) DeleteNotificationById(ctx context.Context, id string) error {
-	err := n.notificationRepo.Remove(id)
+	err := n.notificationRepo.Remove(ctx, id)
 	return err
 }
 
 func (n notificationService) MarkNotificationAsCancelled(ctx context.Context, id string) error {
-	err := n.notificationRepo.UpdateStatus(id, model.StatusCancelled)
+	err := n.notificationRepo.UpdateStatus(ctx, id, model.StatusCancelled)
 	if err != nil {
 		zlog.Logger.Error().Err(err).Str("id", id).Msg("Failed to mark notification as cancelled")
 		return err
@@ -129,7 +129,7 @@ func (n notificationService) MarkNotificationAsCancelled(ctx context.Context, id
 }
 
 func (n notificationService) ProcessNotificationResult(ctx context.Context, result model.NotificationResult) error {
-	err := n.notificationRepo.UpdateStatus(result.ID, result.Status)
+	err := n.notificationRepo.UpdateStatus(ctx, result.ID, result.Status)
 	if err != nil {
 		zlog.Logger.Error().Str("notification_id", result.ID).Str("status", string(result.Status))
 		return err
@@ -138,9 +138,9 @@ func (n notificationService) ProcessNotificationResult(ctx context.Context, resu
 	return nil
 }
 
-func (n notificationService) ReadChatData(chatID int64, cookie string) {
+func (n notificationService) ReadChatData(ctx context.Context, chatID int64, cookie string) {
 	zlog.Logger.Info().Int64("chat_id", chatID).Str("cookie", cookie).Msg("read chat")
-	err := n.chatIdsRepo.Set(cookie, strconv.FormatInt(chatID, 10))
+	err := n.chatIdsRepo.Set(ctx, cookie, strconv.FormatInt(chatID, 10))
 	if err != nil {
 		zlog.Logger.Error().
 			Int64("chat_id", chatID).

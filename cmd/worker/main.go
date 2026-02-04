@@ -48,15 +48,13 @@ func main() {
 	// 4. Init Senders
 	emailSender, emailSenderInitErr := sender.NewEmailSender(emailSenderConfig)
 	if emailSenderInitErr != nil {
-		zlog.Logger.Error().Err(emailSenderInitErr).Msg("Failed to initialize email telegram")
+		zlog.Logger.Error().Err(emailSenderInitErr).Msg("Failed to initialize email sender")
 	}
-
-	// Для отправки уведомлений в Telegram бота
 
 	telegramToken := cfg.Telegram.Token
 	telegramSender, telegramSenderInitErr := telegram.NewTelegramSender(telegramToken)
 	if telegramSenderInitErr != nil {
-		zlog.Logger.Error().Err(telegramSenderInitErr).Msg("Failed to initialize telegram")
+		zlog.Logger.Error().Err(telegramSenderInitErr).Msg("Failed to initialize telegram sender")
 	}
 
 	resultPublisher := message_queue_result.NewMessageQueueResultPublisher(

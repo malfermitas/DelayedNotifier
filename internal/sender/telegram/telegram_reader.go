@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"DelayedNotifier/internal/shared"
+	"context"
 
 	"github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/wb-go/wbf/zlog"
@@ -30,10 +31,10 @@ func (t *TelegramReader) Run() {
 	updates := t.bot.GetUpdatesChan(u)
 
 	for update := range updates {
-		if update.Message.IsCommand() {
+		if update.Message != nil && update.Message.IsCommand() {
 			switch update.Message.Command() {
 			case "start":
-				t.chatDataReader.ReadChatData(update.Message.Chat.ID, update.Message.CommandArguments())
+				t.chatDataReader.ReadChatData(context.Background(), update.Message.Chat.ID, update.Message.CommandArguments())
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Hi! Now I will send you any incoming notifications.")
 				_, err := t.bot.Send(msg)
 				if err != nil {

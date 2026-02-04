@@ -5,6 +5,10 @@ import (
 	"context"
 )
 
+type Sender interface {
+	Send(ctx context.Context, to string, message string) error
+}
+
 type NotificationQueueProcessor interface {
 	ProcessNotificationFromQueue(ctx context.Context, notification model.Notification) error
 }
@@ -16,7 +20,7 @@ type NotificationService interface {
 	DeleteNotificationById(ctx context.Context, id string) error
 	MarkNotificationAsCancelled(ctx context.Context, id string) error
 	ProcessNotificationResult(ctx context.Context, result model.NotificationResult) error
-	ReadChatData(chatID int64, cookie string)
+	ReadChatData(ctx context.Context, chatID int64, cookie string)
 }
 
 type MessageQueuePublisher interface {
@@ -35,5 +39,5 @@ type ResultPublisher interface {
 }
 
 type TelegramChatIDReader interface {
-	ReadChatData(chatID int64, cookie string)
+	ReadChatData(ctx context.Context, chatID int64, cookie string)
 }

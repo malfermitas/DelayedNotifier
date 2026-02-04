@@ -1,6 +1,7 @@
 package sender
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -42,15 +43,13 @@ func NewEmailSender(cfg EmailSenderConfig) (*EmailSender, error) {
 	return &EmailSender{cfg: cfg}, nil
 }
 
-func (s *EmailSender) SendEmail(toEmail string, subject string, text string) error {
+func (s *EmailSender) Send(ctx context.Context, toEmail string, text string) error {
 	address := net.JoinHostPort(s.cfg.SMTPHost, strconv.Itoa(s.cfg.SMTPPort))
 
 	headers := make([]string, 0, 5)
 	headers = append(headers, "From: "+s.cfg.From)
 	headers = append(headers, "To: "+toEmail)
-	if subject != "" {
-		headers = append(headers, "Subject: "+subject)
-	}
+	headers = append(headers, "Subject: Notification")
 	headers = append(headers, "MIME-Version: 1.0")
 	headers = append(headers, "Content-Type: text/plain; charset=UTF-8")
 

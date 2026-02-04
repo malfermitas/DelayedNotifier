@@ -1,7 +1,9 @@
 package telegram
 
 import (
+	"context"
 	"fmt"
+	"strconv"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/wb-go/wbf/zlog"
@@ -21,9 +23,13 @@ func NewTelegramSender(token string) (*TelegramSender, error) {
 	return &TelegramSender{bot: bot}, nil
 }
 
-func (ts *TelegramSender) SendMessage(chatID int64, text string) error {
+func (ts *TelegramSender) Send(ctx context.Context, to string, text string) error {
+	chatID, err := strconv.ParseInt(to, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid chat id: %w", err)
+	}
 	msg := tgbotapi.NewMessage(chatID, text)
-	_, err := ts.bot.Send(msg)
+	_, err = ts.bot.Send(msg)
 	if err != nil {
 		return fmt.Errorf("unable to send the message: %v", err)
 	}
