@@ -119,7 +119,13 @@ func (n notificationService) DeleteNotificationById(ctx context.Context, id stri
 }
 
 func (n notificationService) MarkNotificationAsCancelled(ctx context.Context, id string) error {
-	return n.notificationRepo.UpdateStatus(id, model.StatusCancelled)
+	err := n.notificationRepo.UpdateStatus(id, model.StatusCancelled)
+	if err != nil {
+		zlog.Logger.Error().Err(err).Str("id", id).Msg("Failed to mark notification as cancelled")
+		return err
+	}
+	zlog.Logger.Info().Str("id", id).Msg("Marked notification as cancelled")
+	return nil
 }
 
 func (n notificationService) ProcessNotificationResult(ctx context.Context, result model.NotificationResult) error {

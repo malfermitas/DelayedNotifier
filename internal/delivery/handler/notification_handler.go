@@ -15,11 +15,12 @@ type NotificationHandler interface {
 	Index(ctx *ginext.Context)
 }
 type notificationHandler struct {
-	service shared.NotificationService
+	service     shared.NotificationService
+	botUsername string
 }
 
-func NewNotificationHandler(service shared.NotificationService) NotificationHandler {
-	return notificationHandler{service: service}
+func NewNotificationHandler(service shared.NotificationService, botUsername string) NotificationHandler {
+	return notificationHandler{service: service, botUsername: botUsername}
 }
 
 type CreateNotificationRequest struct {
@@ -100,5 +101,6 @@ func (h notificationHandler) Index(ctx *ginext.Context) {
 
 	ctx.HTML(http.StatusOK, "index.html", gin.H{
 		"notifications": notifications,
+		"botUsername":   h.botUsername,
 	})
 }

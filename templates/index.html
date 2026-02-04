@@ -15,7 +15,7 @@
         .status-failed { color: red; }
     </style>
 </head>
-<body data-bot-username="">
+<body data-bot-username="{{.botUsername}}">
 <div class="container">
     <h1>Delayed Notifier</h1>
 
@@ -32,15 +32,20 @@
                     <!-- Заменяем input на более понятный вид, JS сам добавит календарь -->
                     <input type="text" class="form-control" id="send_at" placeholder="Select date and time" required>
                 </div>
-                <div class="mb-3">
-                    <label for="channel" class="form-label">Channel</label>
-                    <select class="form-select" id="channel">
-                        <option value="telegram">Telegram</option>
-                    </select>
-                </div>
+        <div class="mb-3">
+            <label for="channel" class="form-label">Channel</label>
+            <select class="form-select" id="channel">
+                <option value="email" selected>Email</option>
+                <option value="telegram">Telegram</option>
+            </select>
+        </div>
+        <div class="mb-3" id="emailInputGroup" style="display:block;">
+            <label for="email" class="form-label">Email</label>
+            <input type="email" class="form-control" id="email" placeholder="you@example.com">
+        </div>
                 <button type="submit" class="btn btn-primary">Schedule</button>
             </form>
-            <div class="d-flex justify-content-start mb-3">
+<div class="mb-3" id="telegramBindingGroup" style="display:none;">
                 <a id="bindBotBtn" class="btn btn-secondary" href="#" role="button">Open Telegram Bot</a>
             </div>
         </div>
@@ -85,8 +90,8 @@
         enableTime: true,
         dateFormat: "Y-m-d H:i:S",
         time_24hr: true,
-        defaultHour: 12,
-        minuteIncrement: 1
+        minuteIncrement: 1,
+        defaultDate: new Date()
     });
 
     document.getElementById('createForm').onsubmit = async (e) => {
@@ -121,6 +126,9 @@
             send_at: isoString,
             channel: document.getElementById('channel').value
         };
+        if (data.channel === 'email') {
+            data.email = document.getElementById('email').value;
+        }
         // Read session cookie and pass it via header; ensure cookies are sent
         function getCookie(name) {
             const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
@@ -171,7 +179,7 @@
         });
     });
         </script>
-        <script>
+<script>
         (function() {
           function getCookie(name) {
             const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
@@ -195,6 +203,26 @@
             btn.href = 'https://t.me/' + botUsername + '?start=' + encodeURIComponent(session);
             btn.target = '_blank';
           }
+        })();
+        </script>
+        
+        <script>
+        (function() {
+          const channelEl = document.getElementById('channel');
+          const emailGroup = document.getElementById('emailInputGroup');
+          const telegramGroup = document.getElementById('telegramBindingGroup');
+          function updateUI() {
+            const val = channelEl && channelEl.value;
+            if (val === 'email') {
+              if (emailGroup) emailGroup.style.display = '';
+              if (telegramGroup) telegramGroup.style.display = 'none';
+            } else if (val === 'telegram') {
+              if (emailGroup) emailGroup.style.display = 'none';
+              if (telegramGroup) telegramGroup.style.display = '';
+            }
+          }
+          if (channelEl) channelEl.addEventListener('change', updateUI);
+          updateUI();
         })();
         </script>
         </body>
