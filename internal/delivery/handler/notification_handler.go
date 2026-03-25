@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"DelayedNotifier/internal/service"
 	"DelayedNotifier/internal/shared"
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -24,10 +26,15 @@ func NewNotificationHandler(service shared.NotificationService, botUsername stri
 }
 
 type CreateNotificationRequest struct {
-	Message string `json:"message" binding:"required"`
-	SendAt  string `json:"send_at" binding:"required"`
-	Channel string `json:"channel" binding:"required"`
-	Email   string `json:"email"`
+	Message   string `json:"message" binding:"required"`
+	SendAt    string `json:"send_at" binding:"required"`
+	Channel   string `json:"channel" binding:"required"`
+	Email     string `json:"email"`
+	Recipient struct {
+		Email  string `json:"email"`
+		ChatID string `json:"chat_id"`
+		UserID string `json:"user_id"`
+	} `json:"recipient"`
 }
 
 // CreateNotification – POST /notify — создание уведомлений с датой и временем отправки
@@ -38,10 +45,9 @@ func (h notificationHandler) CreateNotification(ctx *ginext.Context) {
 		return
 	}
 
-	sessionCookie := ctx.GetHeader("X-Session")
-
-	if sessionCookie == "" {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Bad Request"})
+	requestEmail := req.Recipient.Email
+	if requestEmail == "" {
+		requestEmail = req.Email
 	}
 
 	notificationId, err := h.service.CreateNotification(
@@ -49,15 +55,24 @@ func (h notificationHandler) CreateNotification(ctx *ginext.Context) {
 		req.Message,
 		req.SendAt,
 		req.Channel,
-		req.Email,
-		sessionCookie,
+		requestEmail,
+		req.Recipient.ChatID,
+		req.Recipient.UserID,
 	)
 
 	if err != nil {
+		if errors.Is(err, service.ErrInvalidNotificationChannel) ||
+			errors.Is(err, service.ErrEmailRecipientRequired) ||
+			errors.Is(err, service.ErrTelegramRecipientRequired) ||
+			errors.Is(err, service.ErrTelegramRecipientNotFound) {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
 
-	ctx.JSON(http.StatusCreated, gin.H{"message": notificationId})
+	ctx.JSON(http.StatusCreated, gin.H{"id": notificationId, "message": notificationId, "status": "scheduled"})
 }
 
 // GetNotificationStatus – GET /notify/{id} — получение статуса уведомления
@@ -71,6 +86,7 @@ func (h notificationHandler) GetNotificationStatus(ctx *ginext.Context) {
 	notification, err := h.service.GetNotificationById(ctx, notificationID)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
 	ctx.JSON(http.StatusOK, notification)
@@ -87,6 +103,7 @@ func (h notificationHandler) CancelNotification(ctx *ginext.Context) {
 	err := h.service.MarkNotificationAsCancelled(ctx, notificationID)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
 
 	ctx.Status(http.StatusOK)

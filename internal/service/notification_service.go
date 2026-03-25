@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/wb-go/wbf/helpers"
@@ -33,16 +34,24 @@ func NewNotificationService(
 
 var NotificationCancelledError = errors.New("notification cancelled")
 
+var (
+	ErrInvalidNotificationChannel = errors.New("invalid notification channel name")
+	ErrEmailRecipientRequired     = errors.New("recipient email is required for email channel")
+	ErrTelegramRecipientRequired  = errors.New("recipient chat_id or user_id is required for telegram channel")
+	ErrTelegramRecipientNotFound  = errors.New("telegram chat_id not found for user_id")
+)
+
 // CreateNotification creates a new notification with the provided message, send time, and channel.
 // It returns the ID of the created notification or an error if the operation fails.
-// User cookie is used to link it to telegram chat id
+// UserID is used to link telegram chat id to an external user.
 func (n notificationService) CreateNotification(
 	ctx context.Context,
 	message,
 	sendAt,
 	channel string,
 	email string,
-	userCookie string,
+	telegramChatID string,
+	userID string,
 ) (string, error) {
 	notificationId := helpers.CreateUUID()
 	sendAtTime, conversionError := time.Parse(time.RFC3339, sendAt)
@@ -54,21 +63,36 @@ func (n notificationService) CreateNotification(
 		}
 	}
 
-	telegramChatID, err := n.chatIdsRepo.Get(ctx, userCookie)
-	if err != nil {
-		zlog.Logger.Error().
-			Str("telegramChatID", telegramChatID).
-			Str("cookie", userCookie).
-			Err(err).
-			Msg("Failed to get telegram chat id for cookie")
-
-		return "", err
-	}
-
 	notificationChannel := model.NotificationChannel(channel)
 
 	if !notificationChannel.IsValidChannelName() {
-		return "", errors.New("invalid notification channel name")
+		return "", ErrInvalidNotificationChannel
+	}
+
+	if notificationChannel == model.EmailChannel && email == "" {
+		return "", ErrEmailRecipientRequired
+	}
+
+	if notificationChannel == model.TelegramChannel {
+		if telegramChatID == "" {
+			if userID == "" {
+				return "", ErrTelegramRecipientRequired
+			}
+
+			resolvedChatID, err := n.chatIdsRepo.GetByUserID(ctx, userID)
+			if err != nil {
+				zlog.Logger.Error().
+					Str("user_id", userID).
+					Err(err).
+					Msg("Failed to resolve telegram chat id by user id")
+				return "", ErrTelegramRecipientNotFound
+			}
+
+			telegramChatID = resolvedChatID
+		}
+		email = ""
+	} else {
+		telegramChatID = ""
 	}
 
 	notification := model.NewNotification(
@@ -82,7 +106,7 @@ func (n notificationService) CreateNotification(
 
 	notification.Status = model.StatusPending
 
-	err = n.notificationRepo.Save(ctx, notification)
+	err := n.notificationRepo.Save(ctx, notification)
 	if err != nil {
 		return "", err
 	}
@@ -138,13 +162,19 @@ func (n notificationService) ProcessNotificationResult(ctx context.Context, resu
 	return nil
 }
 
-func (n notificationService) ReadChatData(ctx context.Context, chatID int64, cookie string) {
-	zlog.Logger.Info().Int64("chat_id", chatID).Str("cookie", cookie).Msg("read chat")
-	err := n.chatIdsRepo.Set(ctx, cookie, strconv.FormatInt(chatID, 10))
+func (n notificationService) ReadChatData(ctx context.Context, chatID int64, userID string) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		zlog.Logger.Warn().Int64("chat_id", chatID).Msg("skip telegram binding because user_id is empty")
+		return
+	}
+
+	zlog.Logger.Info().Int64("chat_id", chatID).Str("user_id", userID).Msg("read chat")
+	err := n.chatIdsRepo.SetByUserID(ctx, userID, strconv.FormatInt(chatID, 10))
 	if err != nil {
 		zlog.Logger.Error().
 			Int64("chat_id", chatID).
-			Str("cookie", cookie).
+			Str("user_id", userID).
 			Err(err).
 			Msg("could not save chat id to database")
 	}

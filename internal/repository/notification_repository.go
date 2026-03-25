@@ -32,13 +32,15 @@ func NewNotificationRepository(db *dbpg.DB, logger *zlog.Zerolog) NotificationRe
 
 func (n notificationRepository) Save(ctx context.Context, notification *model.Notification) error {
 	query := `
-		INSERT INTO notifications (id, message, send_at, status, channel, created_at, updated_at, retry_count)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO notifications (id, message, send_at, status, channel, email, telegram_id, created_at, updated_at, retry_count)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		ON CONFLICT (id) DO UPDATE SET
 			message = EXCLUDED.message,
 			send_at = EXCLUDED.send_at,
 			status = EXCLUDED.status,
 			channel = EXCLUDED.channel,
+			email = EXCLUDED.email,
+			telegram_id = EXCLUDED.telegram_id,
 			updated_at = EXCLUDED.updated_at,
 			retry_count = EXCLUDED.retry_count
 	`
@@ -48,6 +50,8 @@ func (n notificationRepository) Save(ctx context.Context, notification *model.No
 		notification.SendAt,
 		notification.Status,
 		notification.Channel,
+		notification.Email,
+		notification.TelegramID,
 		notification.CreatedAt,
 		notification.UpdatedAt,
 		notification.RetryCount,
@@ -64,7 +68,7 @@ func (n notificationRepository) Save(ctx context.Context, notification *model.No
 
 func (n notificationRepository) GetByID(ctx context.Context, id string) (*model.Notification, error) {
 	query := `
-		SELECT id, message, send_at, status, channel, created_at, updated_at, retry_count
+		SELECT id, message, send_at, status, channel, COALESCE(email, ''), COALESCE(telegram_id, ''), created_at, updated_at, retry_count
 		FROM notifications 
 		WHERE id = $1
 	`
@@ -77,6 +81,8 @@ func (n notificationRepository) GetByID(ctx context.Context, id string) (*model.
 		&notification.SendAt,
 		&notification.Status,
 		&notification.Channel,
+		&notification.Email,
+		&notification.TelegramID,
 		&notification.CreatedAt,
 		&notification.UpdatedAt,
 		&notification.RetryCount,
@@ -98,7 +104,7 @@ func (n notificationRepository) GetByID(ctx context.Context, id string) (*model.
 
 func (n notificationRepository) GetAll(ctx context.Context) ([]*model.Notification, error) {
 	query := `
-		SELECT id, message, send_at, status, channel, created_at, updated_at, retry_count
+		SELECT id, message, send_at, status, channel, COALESCE(email, ''), COALESCE(telegram_id, ''), created_at, updated_at, retry_count
 		FROM notifications 
 		ORDER BY created_at DESC
 	`
@@ -119,6 +125,8 @@ func (n notificationRepository) GetAll(ctx context.Context) ([]*model.Notificati
 			&notification.SendAt,
 			&notification.Status,
 			&notification.Channel,
+			&notification.Email,
+			&notification.TelegramID,
 			&notification.CreatedAt,
 			&notification.UpdatedAt,
 			&notification.RetryCount,

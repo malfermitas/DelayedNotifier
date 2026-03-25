@@ -15,7 +15,8 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Port string `mapstructure:"port"`
+	Port     string `mapstructure:"port"`
+	EnableUI bool   `mapstructure:"enable_ui"`
 }
 
 type DatabaseConfig struct {
@@ -55,7 +56,9 @@ func Load(path string, pathEnv string) (*Config, error) {
 		return nil, err
 	}
 
-	var cfg Config
+	cfg := Config{
+		Server: ServerConfig{EnableUI: true},
+	}
 	if err := c.Unmarshal(&cfg); err != nil {
 		return nil, err
 	}

@@ -8,8 +8,8 @@ import (
 )
 
 type ChatIdsRepository interface {
-	Set(ctx context.Context, cookieID string, chatID string) error
-	Get(ctx context.Context, cookieID string) (string, error)
+	SetByUserID(ctx context.Context, userID string, chatID string) error
+	GetByUserID(ctx context.Context, userID string) (string, error)
 }
 
 type chatIdsRepository struct {
@@ -20,30 +20,34 @@ func NewChatIdsRepository(db *dbpg.DB) ChatIdsRepository {
 	return chatIdsRepository{db: db}
 }
 
-func (c chatIdsRepository) Set(ctx context.Context, cookieID string, chatID string) error {
-	query := `INSERT INTO telegram_chats (cookie_id, telegram_chat_id) VALUES ($1, $2)`
+func (c chatIdsRepository) SetByUserID(ctx context.Context, userID string, chatID string) error {
+	query := `
+		INSERT INTO telegram_chats (user_id, telegram_chat_id)
+		VALUES ($1, $2)
+		ON CONFLICT (user_id) DO UPDATE SET telegram_chat_id = EXCLUDED.telegram_chat_id
+	`
 
-	_, err := c.db.ExecContext(ctx, query, cookieID, chatID)
+	_, err := c.db.ExecContext(ctx, query, userID, chatID)
 	if err != nil {
 		zlog.Logger.Error().Err(err).
-			Str("cookieID", cookieID).
+			Str("userID", userID).
 			Str("chatID", chatID).
-			Msg("Failed to set chatIds")
+			Msg("Failed to set telegram chat by user id")
 		return err
 	}
 	return nil
 }
 
-func (c chatIdsRepository) Get(ctx context.Context, cookieID string) (string, error) {
-	query := `SELECT telegram_chat_id FROM telegram_chats WHERE cookie_id=$1`
+func (c chatIdsRepository) GetByUserID(ctx context.Context, userID string) (string, error) {
+	query := `SELECT telegram_chat_id FROM telegram_chats WHERE user_id = $1`
 
 	telegramChatId := ""
 
-	err := c.db.QueryRowContext(ctx, query, cookieID).Scan(&telegramChatId)
+	err := c.db.QueryRowContext(ctx, query, userID).Scan(&telegramChatId)
 	if err != nil {
 		zlog.Logger.Error().Err(err).
-			Str("cookieID", cookieID).
-			Msg("Failed to get telegram_chat_id")
+			Str("userID", userID).
+			Msg("Failed to get telegram chat by user id")
 		return "", err
 	}
 

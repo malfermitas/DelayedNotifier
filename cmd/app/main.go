@@ -73,7 +73,7 @@ func main() {
 	)
 
 	h := handler.NewNotificationHandler(svc, cfg.Telegram.BotUsername)
-	router := delivery.NewRouter(h)
+	router := delivery.NewRouter(h, cfg.Server.EnableUI)
 
 	// 7. HTTP Server
 	server := &http.Server{

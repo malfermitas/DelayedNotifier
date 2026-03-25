@@ -78,6 +78,7 @@ http://localhost:8080
 ```yaml
 server:
   port: "8080"                    # Порт HTTP сервера
+  enable_ui: true                  # Включает Web-интерфейс на маршруте /
 
 database:
   host: "localhost"               # Хост PostgreSQL
@@ -127,20 +128,26 @@ email:
 ```http
 POST /notify
 Content-Type: application/json
-X-Session: session_id
 
 {
   "message": "Текст уведомления",
   "send_at": "2024-12-31T23:59:59+03:00",
   "channel": "email" | "telegram",
-  "email": "recipient@example.com"  # только для email
+  "recipient": {
+    "email": "recipient@example.com",     # для channel=email
+    "chat_id": "123456789",               # можно передать напрямую для channel=telegram
+    "user_id": "42"                       # или дать user_id, если chat_id уже привязан к пользователю
+  }
 }
 ```
+
+Для привязки Telegram пользователь должен написать боту `/start <user_id>`.
 
 **Ответ:**
 ```json
 {
-  "message": "notification_id"
+  "id": "notification_id",
+  "status": "scheduled"
 }
 ```
 
@@ -169,6 +176,8 @@ DELETE /notify/{id}
 ```http
 GET /
 ```
+
+Маршрут доступен только при `server.enable_ui: true`.
 
 ## Структура проекта
 

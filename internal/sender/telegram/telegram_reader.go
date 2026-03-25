@@ -34,8 +34,18 @@ func (t *TelegramReader) Run() {
 		if update.Message != nil && update.Message.IsCommand() {
 			switch update.Message.Command() {
 			case "start":
-				t.chatDataReader.ReadChatData(context.Background(), update.Message.Chat.ID, update.Message.CommandArguments())
-				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Hi! Now I will send you any incoming notifications.")
+				userID := update.Message.CommandArguments()
+				if userID == "" {
+					msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Send /start <user_id> to link this Telegram chat to your account.")
+					_, err := t.bot.Send(msg)
+					if err != nil {
+						zlog.Logger.Error().Err(err).Msg("Message send failed")
+					}
+					continue
+				}
+
+				t.chatDataReader.ReadChatData(context.Background(), update.Message.Chat.ID, userID)
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Hi! Your Telegram chat is linked. Now I will send you notifications.")
 				_, err := t.bot.Send(msg)
 				if err != nil {
 					zlog.Logger.Error().Err(err).Msg("Message send failed")
